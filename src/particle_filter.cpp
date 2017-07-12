@@ -29,7 +29,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	// NOTE: Consult particle_filter.h for more information about this method (and others in this file).
 	
 	static default_random_engine gen;
-    gen.seed(123);
+    gen.seed(256);
     num_particles = NUMBER_OF_PARTICLES; // init number of particles to use
 	// Create normal distributions for x, y and theta.
 	normal_distribution<double> dist_x(x, std[0]);
@@ -54,6 +54,36 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
 	// NOTE: When adding noise you may find std::normal_distribution and std::default_random_engine useful.
 	//  http://en.cppreference.com/w/cpp/numeric/random/normal_distribution
 	//  http://www.cplusplus.com/reference/random/default_random_engine/
+	
+	// Some constants to save computation power
+	const double vel_d_t = velocity * delta_t;
+	const double yaw_d_t = yaw_rate * delta_t;
+	const double vel_yaw = velocity/yaw_rate;
+	
+	static default_random_engine gen;
+    gen.seed(256);
+    normal_distribution<double> dist_x(0.0, std_pos[0]);
+	normal_distribution<double> dist_y(0.0, std_pos[1]);
+	normal_distribution<double> dist_theta(0.0, std_pos[2]);
+	
+	for (int i = 0; i < num_particles; i++){
+        if (fabs(yaw_rate) < EPS){
+			// particles[i].theta unchanged if yaw_rate is too small
+            particles[i].x += vel_d_t * cos(particles[i].theta);
+            particles[i].y += vel_d_t * sin(particles[i].theta);
+        }
+        else{
+            const double theta_new = particles[i].theta + yaw_d_t;
+            particles[i].x += vel_yaw * (sin(theta_new) - sin(particles[i].theta));
+            particles[i].y += vel_yaw * (-cos(theta_new) + cos(particles[i].theta));
+            particles[i].theta = theta_new;
+        }
+		
+        // Add random Gaussian noise
+        particles[i].x += dist_x(gen);
+        particles[i].y += dist_y(gen);
+        particles[i].theta += dist_theta(gen);
+	}
 
 }
 
