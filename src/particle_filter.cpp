@@ -35,9 +35,11 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	normal_distribution<double> dist_x(x, std[0]);
 	normal_distribution<double> dist_y(y, std[1]);
 	normal_distribution<double> dist_theta(theta, std[2]);
+	
 	particles.resize(num_particles); // Resize the `particles` vector to fit desired number of particles
 	weights.resize(num_particles);
 	double init_weight = 1.0/num_particles;
+	
 	for (int i = 0; i < num_particles; i++){
 		particles[i].id = i;
 		particles[i].x = dist_x(gen);
@@ -92,7 +94,22 @@ void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::ve
 	//   observed measurement to this particular landmark.
 	// NOTE: this method will NOT be called by the grading code. But you will probably find it useful to 
 	//   implement this method and use it as a helper during the updateWeights phase.
-
+	
+	const double BIG_NUMBER = 10000000.0;
+	for (int i = 0; i < observations.size(); i++) {
+		int current_j;
+		double current_smallest_error = BIG_NUMBER;
+		for (int j = 0; j < predicted.size(); j++) {
+		  const double dx = predicted[j].x - observations[i].x;
+		  const double dy = predicted[j].y - observations[i].y;
+		  const double error = dx * dx + dy * dy;
+		  if (error < current_smallest_error) {
+			current_j = j;
+			current_smallest_error = error;
+		  }
+		}
+		observations[i].id = current_j;
+	  }
 }
 
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[], 
