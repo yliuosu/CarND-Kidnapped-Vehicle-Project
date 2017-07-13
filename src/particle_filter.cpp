@@ -19,8 +19,9 @@
 
 using namespace std;
 
-#define NUMBER_OF_PARTICLES 500 // Can be decreased (even 12 particles can pass the test)
-#define EPS 0.001  				// Just a small number
+const float INITIAL_WEIGHT = 1.0;
+const int NUMBER_OF_PARTICLES = 100; 
+const float EPS = 0.001;  	
 
 void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	// TODO: Set the number of particles. Initialize all particles to first position (based on estimates of 
@@ -29,8 +30,9 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	// NOTE: Consult particle_filter.h for more information about this method (and others in this file).
 	
 	static default_random_engine gen;
-    gen.seed(256);
+    //gen.seed(256);
     num_particles = NUMBER_OF_PARTICLES; // init number of particles to use
+	
 	// Create normal distributions for x, y and theta.
 	normal_distribution<double> dist_x(x, std[0]);
 	normal_distribution<double> dist_y(y, std[1]);
@@ -38,15 +40,19 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	
 	particles.resize(num_particles); // Resize the `particles` vector to fit desired number of particles
 	weights.resize(num_particles);
-	double init_weight = 1.0/num_particles;
+	//double init_weight = 1.0/num_particles;
+	double init_weight = 1.0;
 	
 	for (int i = 0; i < num_particles; i++){
 		particles[i].id = i;
 		particles[i].x = dist_x(gen);
 		particles[i].y = dist_y(gen);
 		particles[i].theta = dist_theta(gen);
+		
 		particles[i].weight = init_weight;
+		weights[i] = init_weight;
 	}	
+	
 	is_initialized = true;
 
 }
@@ -63,19 +69,20 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
 	const double vel_yaw = velocity/yaw_rate;
 	
 	static default_random_engine gen;
-    gen.seed(256);
+    //gen.seed(256);
     normal_distribution<double> dist_x(0.0, std_pos[0]);
 	normal_distribution<double> dist_y(0.0, std_pos[1]);
 	normal_distribution<double> dist_theta(0.0, std_pos[2]);
 	
 	for (int i = 0; i < num_particles; i++){
+		
         if (fabs(yaw_rate) < EPS){
 			// particles[i].theta unchanged if yaw_rate is too small
             particles[i].x += vel_d_t * cos(particles[i].theta);
             particles[i].y += vel_d_t * sin(particles[i].theta);
         }
         else{
-            const double theta_new = particles[i].theta + yaw_d_t;
+            double theta_new = particles[i].theta + yaw_d_t;
             particles[i].x += vel_yaw * (sin(theta_new) - sin(particles[i].theta));
             particles[i].y += vel_yaw * (-cos(theta_new) + cos(particles[i].theta));
             particles[i].theta = theta_new;
@@ -125,12 +132,14 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 	//   3.33
 	//   http://planning.cs.uiuc.edu/node99.html
 	
+	
 	const double sigma_xx = std_landmark[0]*std_landmark[0];
 	const double sigma_yy = std_landmark[1]*std_landmark[1];
 	const double k = 2 * M_PI * std_landmark[0] * std_landmark[1];
 	double dx = 0.0;
 	double dy = 0.0;
 	double sum_w = 0.0; // Sum of weights for future weights normalization
+	
 	for (int i = 0; i < num_particles; i++){
 		double weight_no_exp = 0.0;
 		const double sin_theta = sin(particles[i].theta);
@@ -172,7 +181,109 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 	for (int i = 0; i < num_particles; i++){
 		particles[i].weight /= sum_w * k;
 		weights[i] = particles[i].weight;
-	}	
+	}
+	
+	// constants used later for calculating the new weights
+ 	const double stdx = std_landmark[0];
+ 	const double stdy = std_landmark[1];
+ 	const double na = 0.5 / (stdx * stdx);
+ 	const double nb = 0.5 / (stdy * stdy);
+ 	const double d = sqrt( 2.0 * M_PI * stdx * stdy);
+
+ 	for (int  i = 0; i < NUMBER_OF_PARTICLES; i++) {
+
+    	const double px = this->particles[i].x;
+    	const double py = this->particles[i].y;
+    	const double ptheta = this->particles[i].theta;
+
+    	vector<LandmarkObs> landmarks_in_range;
+    	vector<LandmarkObs> map_observations;
+
+	   /**************************************************************
+		* STEP 1:
+		* transform each observations to map coordinates
+		* assume observations are made in the particle's perspective
+		**************************************************************/
+    	for (int j = 0; j < observations.size(); j++){
+
+			const int oid = observations[j].id;
+			const double ox = observations[j].x;
+			const double oy = observations[j].y;
+			const double transformed_x = px + ox * cos(ptheta) - oy * sin(ptheta);
+			const double transformed_y = py + oy * cos(ptheta) + ox * sin(ptheta);
+
+			LandmarkObs observation = {
+       			oid,
+        		transformed_x,
+        		transformed_y
+      		};
+
+      		map_observations.push_back(observation);
+    	}
+
+	   /**************************************************************
+		* STEP 2:
+		* Find map landmarks within the sensor range
+		**************************************************************/
+    	for (int j = 0;  j < map_landmarks.landmark_list.size(); j++) {
+
+			const int mid = map_landmarks.landmark_list[j].id_i;
+      		const double mx = map_landmarks.landmark_list[j].x_f;
+      		const double my = map_landmarks.landmark_list[j].y_f;
+
+      		const double dx = mx - px;
+      		const double dy = my - py;
+      		const double error = sqrt(dx * dx + dy * dy);
+
+      		if (error < sensor_range) {
+        		LandmarkObs landmark_in_range = {
+          			mid,
+          			mx,
+          			my
+         		};
+
+      	  		landmarks_in_range.push_back(landmark_in_range);
+     		}
+    	}
+
+	  /**************************************************************
+	   * STEP 3:
+	   * Associate landmark in range (id) to landmark observations
+	   * this function modifies std::vector<LandmarkObs> observations
+	   * NOTE: - all landmarks are in map coordinates
+	   *       - all observations are in map coordinates
+	   **************************************************************/
+   		this->dataAssociation(landmarks_in_range, map_observations);
+
+	   /**************************************************************
+		* STEP 4:
+		* Compare each observation (by actual vehicle) to corresponding
+		* observation by the particle (landmark_in_range)
+		* update the particle weight based on this
+		**************************************************************/
+   	 	double w = INITIAL_WEIGHT;
+
+    	for (int j = 0; j < map_observations.size(); j++){
+
+			const int oid = map_observations[j].id;
+      		const double ox = map_observations[j].x;
+      		const double oy = map_observations[j].y;
+
+      		const double predicted_x = landmarks_in_range[oid].x;
+     	 	const double predicted_y = landmarks_in_range[oid].y;
+
+      		const double dx = ox - predicted_x;
+      		const double dy = oy - predicted_y;
+
+      		const double a = na * dx * dx;
+      		const double b = nb * dy * dy;
+      		const double r = exp(-(a + b)) / d;
+      		w *= r;
+    	}
+
+    	this->particles[i].weight = w;
+    	this->weights[i] = w;
+	}
 }
 
 void ParticleFilter::resample() {
@@ -181,7 +292,7 @@ void ParticleFilter::resample() {
 	//   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
 	
 	static default_random_engine gen;
-    gen.seed(123);
+ 
     discrete_distribution<> dist_particles(weights.begin(), weights.end());
     vector<Particle> new_particles;
     new_particles.resize(num_particles);
