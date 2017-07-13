@@ -30,7 +30,6 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	// NOTE: Consult particle_filter.h for more information about this method (and others in this file).
 	
 	static default_random_engine gen;
-    //gen.seed(256);
     num_particles = NUMBER_OF_PARTICLES; // init number of particles to use
 	
 	// Create normal distributions for x, y and theta.
@@ -38,9 +37,9 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	normal_distribution<double> dist_y(y, std[1]);
 	normal_distribution<double> dist_theta(theta, std[2]);
 	
-	particles.resize(num_particles); // Resize the `particles` vector to fit desired number of particles
+	// Resize the `particles` vector to fit desired number of particles
+	particles.resize(num_particles); 
 	weights.resize(num_particles);
-	//double init_weight = 1.0/num_particles;
 	double init_weight = 1.0;
 	
 	for (int i = 0; i < num_particles; i++){
@@ -48,7 +47,6 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 		particles[i].x = dist_x(gen);
 		particles[i].y = dist_y(gen);
 		particles[i].theta = dist_theta(gen);
-		
 		particles[i].weight = init_weight;
 		weights[i] = init_weight;
 	}	
@@ -69,7 +67,6 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
 	const double vel_yaw = velocity/yaw_rate;
 	
 	static default_random_engine gen;
-    //gen.seed(256);
     normal_distribution<double> dist_x(0.0, std_pos[0]);
 	normal_distribution<double> dist_y(0.0, std_pos[1]);
 	normal_distribution<double> dist_theta(0.0, std_pos[2]);
@@ -77,7 +74,7 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
 	for (int i = 0; i < num_particles; i++){
 		
         if (fabs(yaw_rate) < EPS){
-			// particles[i].theta unchanged if yaw_rate is too small
+			// when yaw_rate is too small, consider it didn't change
             particles[i].x += vel_d_t * cos(particles[i].theta);
             particles[i].y += vel_d_t * sin(particles[i].theta);
         }
