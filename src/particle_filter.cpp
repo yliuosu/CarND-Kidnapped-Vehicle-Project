@@ -19,8 +19,7 @@
 
 using namespace std;
 
-const float INITIAL_WEIGHT = 1.0;
-const int NUMBER_OF_PARTICLES = 100; 
+const float INITIAL_WEIGHT = 1.0; 
 const float EPS = 0.001;  	
 
 void ParticleFilter::init(double x, double y, double theta, double std[]) {
@@ -30,7 +29,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	// NOTE: Consult particle_filter.h for more information about this method (and others in this file).
 	
 	static default_random_engine gen;
-    num_particles = NUMBER_OF_PARTICLES; // init number of particles to use
+    num_particles = 100; // init number of particles to use
 	
 	// Create normal distributions for x, y and theta.
 	normal_distribution<double> dist_x(x, std[0]);
@@ -40,15 +39,14 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	// Resize the `particles` vector to fit desired number of particles
 	particles.resize(num_particles); 
 	weights.resize(num_particles);
-	double init_weight = 1.0;
-	
+
 	for (int i = 0; i < num_particles; i++){
 		particles[i].id = i;
 		particles[i].x = dist_x(gen);
 		particles[i].y = dist_y(gen);
 		particles[i].theta = dist_theta(gen);
-		particles[i].weight = init_weight;
-		weights[i] = init_weight;
+		particles[i].weight = INITIAL_WEIGHT;
+		weights[i] = INITIAL_WEIGHT;
 	}	
 	
 	is_initialized = true;
@@ -136,7 +134,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
  	const double nb = 0.5 / (stdy * stdy);
  	const double d = sqrt( 2.0 * M_PI * stdx * stdy);
 
- 	for (int  i = 0; i < NUMBER_OF_PARTICLES; i++) {
+ 	for (int  i = 0; i < num_particles; i++) {
 
     	const double px = this->particles[i].x;
     	const double py = this->particles[i].y;
